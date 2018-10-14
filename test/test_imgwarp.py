@@ -41,7 +41,7 @@ class Tester(unittest.TestCase):
                                       mask_warped_inv * patch_warped_inv)
         self.assertTrue(res)
 
-    def test_warp_perspective_gradcheck(self):
+    def test_warp_perspective(self):
         # generate input data
         batch_size = 1
         height, width = 16, 32
@@ -49,7 +49,6 @@ class Tester(unittest.TestCase):
 
         # create data patch
         patch = torch.rand(batch_size, 1, height, width)
-        patch = utils.tensor_to_gradcheck_var(patch)  # to var
 
         # create transformation (rotation)
         M = torch.tensor([[
@@ -57,12 +56,46 @@ class Tester(unittest.TestCase):
             [torch.sin(alpha), torch.cos(alpha), 0.],
             [0., 0., 1.],
         ]])  # Bx3x3
-        M = utils.tensor_to_gradcheck_var(M, requires_grad=False)  # to var
 
-        # evaluate function gradient
-        res = gradcheck(tgm.warp_perspective, (patch, M, (height, width,)),
-                        raise_exception=True)
+        # apply transformation and inverse
+        _, _, h, w = patch.shape
+        patch_warped = tgm.warp_perspective(patch, M, dsize=(height, width))
+        patch_warped_inv = tgm.warp_perspective(patch_warped, tgm.inverse(M),
+                                                dsize=(height, width))
+
+        # generate mask to compute error
+        mask = torch.ones_like(patch)
+        mask_warped_inv = tgm.warp_perspective(
+            tgm.warp_perspective(patch, M, dsize=(height, width)),
+            tgm.inverse(M), dsize=(height, width))
+
+        res = utils.check_equal_torch(mask_warped_inv * patch,
+                                      mask_warped_inv * patch_warped_inv)
         self.assertTrue(res)
+
+    def test_warp_perspective_crop(self):
+        # generate input data
+        batch_size = 1
+        h, w = 8, 8
+        hp, wp = 4, 4
+
+        points_src = torch.FloatTensor([[
+            [2, 2], [5, 2], [2, 5], [5, 5],
+        ]])
+
+        points_dst = torch.FloatTensor([[
+            [0, 0], [hp - 1, 0], [0, wp - 1], [hp - 1, wp - 1],
+        ]])
+
+        # compute transformation
+        M = tgm.get_perspective_transform(points_src, points_dst)
+
+        # create data patch
+        patch = torch.rand(batch_size, 1, h, w)
+        #import ipdb;ipdb.set_trace()
+        patch_warped = tgm.warp_perspective(patch, M, dsize=(hp, wp))
+        pass
+        
 
     def test_get_perspective_transform(self):
         # generate input data
@@ -95,5 +128,7 @@ class Tester(unittest.TestCase):
         res = gradcheck(tgm.get_perspective_transform,
             (points_src, points_dst,), raise_exception=True)
         self.assertTrue(res)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -37,8 +37,8 @@ def center_transform(transform, height, width):
 def normalize_transform_to_pix(transform, height, width):
     assert len(transform.shape) == 3, transform.shape
     normal_trans_pix = torch.tensor([[
-        [2. / width, 0., -1.],
-        [0., 2. / height, -1.],
+        [2. / (width - 1), 0., -1.],
+        [0., 2. / (height - 1), -1.],
         [0., 0., 1.]]],
         device=transform.device, dtype=transform.dtype)  # 1x3x3
     pix_trans_normal = inverse(normal_trans_pix)         # 1x3x3
@@ -90,9 +90,9 @@ def warp_perspective(src, M, dsize, flags='bilinear', border_mode=None,
     # center the transformation and normalize
     _, _, height, width = src.shape
     #M_new = center_transform(M, height, width)
-    M_new = normalize_transform_to_pix(M, height, width)
+    #M_new = normalize_transform_to_pix(M, height, width)
     # warp and return
-    return homography_warp(src, inverse(M_new), dsize)
+    return homography_warp(src, inverse(M), dsize)
 
 
 def get_perspective_transform(src, dst):
