@@ -7,6 +7,8 @@ from .homography_warper import homography_warp
 __all__ = [
     "warp_perspective",
     "get_perspective_transform",
+    "normal_transform_pixel",
+    "normalize_transform_to_pix",
 ]
 
 
@@ -34,14 +36,25 @@ def center_transform(transform, height, width):
                         torch.matmul(transform, origin_mat_center))
 
 
-def normalize_transform_to_pix(transform, height, width):
-    assert len(transform.shape) == 3, transform.shape
-    normal_trans_pix = torch.tensor([[
+def normal_transform_pixel(height, width):
+    return torch.tensor([[
         [2. / (width - 1), 0., -1.],
         [0., 2. / (height - 1), -1.],
-        [0., 0., 1.]]],
-        device=transform.device, dtype=transform.dtype)  # 1x3x3
-    pix_trans_normal = inverse(normal_trans_pix)         # 1x3x3
+        [0., 0., 1.]]
+    ])  # 1x3x3
+
+def pix_transform_normal(height, width):
+    return torch.tensor([[
+        [(width - 1) / 2, 0., -1.],
+        [0., (height - 1) / 2, -1.],
+        [0., 0., 1.]]
+    ])  # 1x3x3
+
+def normalize_transform_to_pix(transform, height, width):
+    assert len(transform.shape) == 3, transform.shape
+    normal_trans_pix = normal_transform_pixel(height, width).to(
+        transform.device).type_as(transform)      # 1x3x3
+    pix_trans_normal = inverse(normal_trans_pix)  # 1x3x3
     return torch.matmul(normal_trans_pix,
                         torch.matmul(transform, pix_trans_normal))
 
@@ -90,7 +103,7 @@ def warp_perspective(src, M, dsize, flags='bilinear', border_mode=None,
     # center the transformation and normalize
     _, _, height, width = src.shape
     #M_new = center_transform(M, height, width)
-    #M_new = normalize_transform_to_pix(M, height, width)
+    M_new = normalize_transform_to_pix(M, height, width)
     # warp and return
     return homography_warp(src, inverse(M), dsize)
 

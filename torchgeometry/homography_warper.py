@@ -40,7 +40,7 @@ class HomographyWarper(nn.Module):
             self.height = height
             # create base grid to use for computing the flow
             self.grid = create_meshgrid(
-                height, width, normalized_coordinates=False)
+                height, width, normalized_coordinates=True)
 
     def warp_grid(self, H):
         """
@@ -53,10 +53,10 @@ class HomographyWarper(nn.Module):
         batch_size = H.shape[0]  # expand grid to match the input batch size
         grid = self.grid.repeat(batch_size, 1, 1, 1)  # NxHxWx2
         if len(H.shape) == 3:  # local homography case
-            grid = grid.view(batch_size, -1, 2)  # Nx(H*W)x2
+            H = H.view(batch_size, 1, 1, 3, 3)
         # perform the actual grid transformation,
         # the grid is copied to input device and casted to the same type
-        flow = transform_points(H, grid.to(H.device).type_as(H))    # Nx(...)x2
+        flow = transform_points(H, grid.to(H.device).type_as(H))    # NxHxWx2
         return flow.view(batch_size, self.height, self.width, 2)    # NxHxWx2
 
     def random_warp(self, patch, dist):
@@ -119,17 +119,8 @@ class HomographyWarper(nn.Module):
             raise TypeError("Patch and homography must be on the same device. \
                             Got patch.device: {} dst_H_src.device: {}."
                             .format(patch.device, dst_homo_src.device))
-        grid =  self.warp_grid(dst_homo_src)
-        height, width = patch.shape[-2:]
-        normal_trans_pix = torch.tensor([[
-                [2. / (width - 1), 0., -1.],  
-                    [0., 2. / (height - 1), -1.], 
-                        [0., 0., 1.]]], device=grid.device, dtype=grid.dtype)
-
-        grid_normal = transform_points(normal_trans_pix, grid)
         return torch.nn.functional.grid_sample(
-            #patch, self.warp_grid(dst_homo_src), mode='bilinear',
-            patch, grid_normal, mode='bilinear',
+            patch, self.warp_grid(dst_homo_src), mode='bilinear',
             padding_mode=padding_mode)
 
 # functional api
